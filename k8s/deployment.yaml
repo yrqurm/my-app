@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: 192.168.1.18:5000/my-app:latest
+        image: 192.168.1.18:5000/my-app:v1
         imagePullPolicy: Always
         ports:
         - containerPort: 80
