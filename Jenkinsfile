@@ -2,44 +2,49 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_IMAGE = 'DOCKER_USERNAME/my-app'
-        DOCKER_TAG = "v${BUILD_NUMBER}"
+        REGISTRY = '192.168.1.18:5000'
+        IMAGE_NAME = 'my-app'
     }
     
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/yrqurm/my-app.git'
+                git branch: 'main', 
+                    url: 'https://github.com/yrqurm/my-app.git',
+                    credentialsId: 'github-credentials'
             }
         }
         
-        stage('Build Docker Image') {
+        stage('Build Image') {
             steps {
-                sh 'docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .'
-                sh 'docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest'
+                sh """
+                    docker build -t ${REGISTRY}/${IMAGE_NAME}:v${BUILD_NUMBER} .
+                    docker tag ${REGISTRY}/${IMAGE_NAME}:v${BUILD_NUMBER} ${REGISTRY}/${IMAGE_NAME}:latest
+                """
             }
         }
         
-        stage('Push to Docker Hub') {
+        stage('Push to Registry') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub-password', variable: 'DOCKER_PASS')]) {
-                    sh 'docker login -u DOCKER_USERNAME -p ${DOCKER_PASS}'
-                }
-                sh 'docker push ${DOCKER_IMAGE}:${DOCKER_TAG}'
-                sh 'docker push ${DOCKER_IMAGE}:latest'
+                sh """
+                    docker push ${REGISTRY}/${IMAGE_NAME}:v${BUILD_NUMBER}
+                    docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                """
             }
         }
         
-        stage('Update K8s Manifests') {
+        stage('Update Manifests') {
             steps {
-                sh "sed -i 's|image: DOCKER_USERNAME/my-app:.*|image: DOCKER_USERNAME/my-app:${DOCKER_TAG}|' k8s/deployment.yaml"
-                sh '''
+                sh """
+                    sed -i 's|${REGISTRY}/${IMAGE_NAME}:.*|${REGISTRY}/${IMAGE_NAME}:v${BUILD_NUMBER}|' k8s/deployment.yaml
                     git config user.email "jenkins@localhost"
                     git config user.name "Jenkins CI"
                     git add k8s/deployment.yaml
-                    git commit -m "Update image to ${DOCKER_TAG}"
-                    git push origin main
-                '''
+                    git diff --cached --quiet || git commit -m "Update image to v${BUILD_NUMBER} [skip ci]"
+                """
+                withCredentials([string(credentialsId: 'github-token', variable: 'TOKEN')]) {
+                    sh "git push https://yrqurm:${TOKEN}@github.com/yrqurm/my-app.git main"
+                }
             }
         }
     }
