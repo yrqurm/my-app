@@ -15,6 +15,7 @@ spec:
     spec:
       containers:
       - name: my-app
-        image: DOCKER_USERNAME/my-app:latest
+        image: 192.168.1.18:5000/my-app:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
